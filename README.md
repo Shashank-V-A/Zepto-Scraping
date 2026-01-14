@@ -2,10 +2,6 @@
 
 A beginner-friendly Selenium-based web scraper for extracting product data from Zepto, specifically configured for **Whitefield, Bangalore (PIN: 560067)**.
 
-## 📋 Overview
-
-This scraper is designed for educational and MVP purposes. It extracts product information from Zepto's website, handling JavaScript rendering, lazy loading, and location-based product availability.
-
 ### What It Does
 
 1. **Launches Chrome browser** (visible by default for debugging)
@@ -146,11 +142,6 @@ If the scraper doesn't find any products, try these steps:
 - **Manually navigate** to a category (e.g., "Groceries", "Fruits & Vegetables")
 - Or modify `scraper.py` to automatically navigate:
   ```python
-  # In main() function, uncomment and modify:
-  navigate_to_category_or_search(driver, search_term="milk")
-  # OR
-  navigate_to_category_or_search(driver, category_url="https://www.zepto.com/category/groceries")
-  ```
 
 ### 3. Check Selectors
 - Zepto may have changed their HTML structure
@@ -213,20 +204,6 @@ for pin in PIN_CODES:
     products = extract_product_data(driver)
     # Save with location-specific filename
     save_to_csv(products, f"output/zepto_{pin}_products.csv")
-```
-
-## 📁 Project Structure
-
-```
-zepto_scraper/
-│
-├── scraper.py                    # Main scraper script
-├── requirements.txt              # Python dependencies
-├── README.md                     # This file
-│
-└── output/                       # Output directory
-    ├── zepto_whitefield_products.csv
-    └── zepto_whitefield_products.json
 ```
 
 ## 🎯 Key Features
@@ -397,4 +374,3 @@ Educational/MVP purposes only. Use responsibly and in accordance with Zepto's Te
 
 ---
 
-**Happy Scraping! 🕷️**
