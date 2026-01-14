@@ -1,6 +1,6 @@
 """
-Zepto Scraper - Fruits & Vegetables Category
-Extracts all products from the Fruits & Vegetables category with accurate values.
+Zepto Scraper - Atta, Rice, Oil & Dals Category
+Extracts all products from the Atta, Rice, Oil & Dals category with accurate values.
 """
 
 from selenium import webdriver
@@ -18,9 +18,11 @@ import os
 import re
 
 # Configuration
-FRUITS_VEGETABLES_URL = "https://www.zepto.com/cn/fruits-vegetables/fruits-vegetables/cid/64374cfe-d06f-4a01-898e-c07c46462c36/scid/e78a8422-5f20-4e4b-9a9f-22a0e53962e3"
-OUTPUT_CSV = "output/zepto_Fruits&Vegetables.csv"
-OUTPUT_JSON = "output/zepto_Fruits&Vegetables.json"
+# TODO: Replace with the actual Atta, Rice, Oil & Dals category URL
+# You can find this by navigating to the category in your browser and copying the URL
+ATTA_RICE_OIL_DALS_URL = "https://www.zepto.com/cn/atta-rice-oil-dals/atta-rice-oil-dals/cid/2f7190d0-7c40-458b-b450-9a1006db3d95/scid/2b5e863c-9497-46ae-a7e9-85f6ef7380da"  # Update this
+OUTPUT_CSV = "output/zepto_atta_rice_oil_dals.csv"
+OUTPUT_JSON = "output/zepto_atta_rice_oil_dals.json"
 
 def setup_driver():
     """Setup Chrome driver with error suppression."""
@@ -49,46 +51,57 @@ def setup_driver():
 
 def is_valid_product(product):
     """
-    Check if product belongs to Fruits & Vegetables categories.
+    Check if product belongs to Atta, Rice, Oil, or Dals/Pulses categories.
     Returns True if valid, False otherwise.
     """
     name = (product.get('name') or '').lower()
     url = (product.get('product_url') or '').lower()
     combined_text = f"{name} {url}".lower()
     
-    # Keywords that indicate invalid products (should be excluded)
+    # Keywords that indicate invalid products (should be excluded) - check these first
     invalid_keywords = [
-        'bread', 'biryani', 'kit', 'incl. of all taxes', 'buy ', 'online'
+        'egg', 'eggs', 'butter', 'paneer', 'cream', 'tofu', 'tempeh', 'milk',
+        'cheese', 'yogurt', 'curd', 'lassi', 'khoa', 'mawa', 'spread',
+        'bread', 'biryani', 'kit', 'incl. of all taxes', 'buy ', 'rice online',
+        'malai paneer', 'fresh paneer', 'table butter', 'cooking butter',
+        'fresh cream', 'half and half', 'probiotic butter'
     ]
     
-    # Check for invalid keywords first
+    # Check for invalid keywords first (with exceptions)
     for invalid_kw in invalid_keywords:
         if invalid_kw in combined_text:
+            # Special exceptions: some products might have these words but are still valid
+            # e.g., "groundnut oil" contains "nut" but is valid
+            if invalid_kw == 'egg' and 'oil' not in name:
+                return False
+            if invalid_kw in ['butter', 'paneer', 'cream', 'tofu', 'tempeh']:
+                # Exception: "ghee" might be called "clarified butter" but we want ghee
+                if invalid_kw == 'butter' and 'ghee' in name:
+                    continue  # Ghee is valid
+                return False
+            if invalid_kw == 'spread' and 'oil' not in name:
+                return False
             if invalid_kw in ['bread', 'biryani', 'kit']:
                 return False
-            if invalid_kw in ['incl. of all taxes', 'buy ', 'online']:
+            if invalid_kw in ['incl. of all taxes', 'buy ', 'rice online']:
+                return False
+            if invalid_kw in ['malai paneer', 'fresh paneer', 'table butter', 'cooking butter']:
+                return False
+            if invalid_kw in ['fresh cream', 'half and half', 'probiotic butter']:
                 return False
     
     # Keywords that indicate valid products
     valid_keywords = [
-        # Fruits
-        'fruit', 'apple', 'banana', 'orange', 'mango', 'grapes', 'strawberry',
-        'blueberry', 'kiwi', 'pineapple', 'watermelon', 'papaya', 'guava',
-        'pomegranate', 'mosambi', 'sweet lime', 'lemon', 'lime', 'avocado',
-        # Vegetables
-        'vegetable', 'tomato', 'onion', 'potato', 'carrot', 'cucumber',
-        'cabbage', 'cauliflower', 'broccoli', 'spinach', 'lettuce', 'coriander',
-        'mint', 'curry leaves', 'chilli', 'pepper', 'capsicum', 'beans',
-        'peas', 'mushroom', 'ginger', 'garlic', 'turmeric', 'radish',
-        'beetroot', 'brinjal', 'lady finger', 'okra', 'pumpkin', 'bottle gourd',
-        # Organics
-        'organic', 'organically grown',
-        # Leafy & Herbs
-        'leafy', 'herb', 'greens', 'palak', 'methi', 'dill', 'basil',
-        # Flowers, Plants & Gardening
-        'flower', 'flowers', 'plant', 'plants', 'gardening', 'seed', 'seeds',
-        'fertilizer', 'pot', 'pots', 'soil', 'sapling', 'saplings', 'rose',
-        'marigold', 'jasmine', 'tulip', 'orchid', 'sunflower', 'lily'
+        # Atta/Flour
+        'atta', 'flour', 'besan', 'sooji', 'rava', 'maida', 'chakki', 'dalia',
+        # Rice
+        'rice', 'basmati', 'sona', 'masoori', 'masuri', 'poha', 'quinoa', 'millet',
+        'kolam', 'idli rice', 'dosa rice', 'ponni', 'matta',
+        # Oil
+        'oil', 'ghee',  # Ghee is a type of clarified butter/oil
+        # Dals/Pulses
+        'dal', 'pulse', 'chana', 'moong', 'urad', 'toor', 'arhar', 'masoor',
+        'rajma', 'kabuli', 'peanut', 'groundnut', 'mungfali', 'sattu'
     ]
     
     # Check if product name or URL contains valid keywords
@@ -148,8 +161,8 @@ def extract_products(driver):
     current_url = driver.current_url
     print(f"  Current URL: {current_url[:80]}...")
     
-    if "fruits-vegetables" not in current_url.lower() and "fruit" not in current_url.lower() and "vegetable" not in current_url.lower():
-        print("  [WARNING] Might not be on Fruits & Vegetables page!")
+    if "atta" not in current_url.lower() and "rice" not in current_url.lower() and "oil" not in current_url.lower() and "dal" not in current_url.lower():
+        print("  [WARNING] Might not be on Atta, Rice, Oil & Dals page!")
     
     # PRIMARY METHOD: Find all elements with price (₹) - most reliable
     print("  Finding products by looking for price (₹)...")
@@ -294,7 +307,7 @@ def extract_products(driver):
                         if len(url_parts) > 1:
                             product_slug = url_parts[1].split("/")[0]
                             # Convert slug to readable name
-                            # e.g., "strawberry-mahabaleshwar" -> "Strawberry Mahabaleshwar"
+                            # e.g., "fortune-sunflower-oil-1l" -> "Fortune Sunflower Oil 1l"
                             name_parts = product_slug.split("-")
                             # Capitalize first letter of each word
                             product_name = " ".join(word.capitalize() for word in name_parts)
@@ -349,7 +362,7 @@ def extract_products(driver):
                         if re.match(r'^\d+\s*(pack|g|kg|ml|l|pc|pcs|Approx)', line_clean, re.IGNORECASE):
                             continue
                         # Skip if it's a category header
-                        if "price list" in line_clean.lower() or ("fruits" in line_clean.lower() and "vegetables" in line_clean.lower()):
+                        if "price list" in line_clean.lower() or ("atta" in line_clean.lower() and "rice" in line_clean.lower()):
                             continue
                         # Skip if it's just a number or weight
                         if re.match(r'^\d+[\s-]+\d+\s*(g|kg)', line_clean, re.IGNORECASE):
@@ -397,7 +410,7 @@ def extract_products(driver):
                     # Double-check: skip if name is still a button
                     name_upper = product['name'].upper()
                     if name_upper not in ["ADD", "NOTIFY", "EXPLORE", "BUY NOW"]:
-                        # Filter: Only include Fruits & Vegetables products
+                        # Filter: Only include Atta, Rice, Oil, or Dals/Pulses products
                         if is_valid_product(product):
                             product['scraped_at'] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                             products.append(product)
@@ -438,21 +451,23 @@ def save_data(products):
     print(f"  - {OUTPUT_JSON}")
 
 def find_subcategories(driver):
-    """Find subcategory links (Fresh Vegetables, Fresh Fruits, Exotics, Organics, etc.) on the category page."""
+    """Find subcategory links (Atta, Rice, Dals, Oil, etc.) on the category page."""
     subcategory_urls = []
     subcategory_names = []
     
-    print("\n  Looking for subcategories (Fresh Vegetables, Fresh Fruits, Exotics, Organics, etc.)...")
+    print("\n  Looking for subcategories (Atta, Rice, Dals, Oil, etc.)...")
     
-    # Common subcategory keywords - ONLY for Fruits & Vegetables
+    # Common subcategory keywords - ONLY for Atta, Rice, Oil, Dals
     subcategory_keywords = [
-        "fresh vegetables", "fresh fruits", "exotic", "premium", "organic",
-        "leafy", "herb", "cuts", "sprouts", "frozen", "vegetable", "fruit",
-        "flower", "flowers", "plant", "plants", "gardening", "seed", "seeds"
+        "atta", "rice", "dal", "dals", "pulse", "pulses", "oil", "oils",
+        "besan", "sooji", "ghee", "healthy atta", "healthy rice", "healthy dal"
     ]
     
-    # Exclude these subcategories (none - we want everything)
-    excluded_keywords = []
+    # Exclude these subcategories
+    excluded_keywords = [
+        "egg", "eggs", "butter", "paneer", "cream", "tofu", "tempeh",
+        "milk", "cheese", "yogurt", "curd", "bread", "biryani"
+    ]
     
     try:
         # Strategy 1: Look for links that might be subcategories
@@ -467,7 +482,7 @@ def find_subcategories(driver):
                 if href and "zepto.com" in href:
                     # Check if URL contains category indicators
                     url_lower = href.lower()
-                    if any(keyword in url_lower for keyword in subcategory_keywords):
+                    if any(keyword in url_lower for keyword in ["atta", "rice", "dal", "oil", "pulse", "besan", "sooji", "ghee"]):
                         # Check if text matches subcategory keywords OR if URL clearly indicates a subcategory
                         is_subcategory = False
                         
@@ -480,7 +495,7 @@ def find_subcategories(driver):
                         elif "/cn/" in href and "/pn/" not in href:
                             # If it's a category URL (not product), it might be a subcategory
                             # Check if it's different from the main category URL
-                            if "fruits-vegetables" not in url_lower or len([k for k in ["fresh", "exotic", "organic", "leafy"] if k in url_lower]) >= 1:
+                            if "atta-rice-oil-dals" not in url_lower or len([k for k in ["atta", "rice", "dal", "oil"] if k in url_lower]) == 1:
                                 # Make sure it doesn't contain excluded keywords
                                 if not any(excluded_kw in url_lower for excluded_kw in excluded_keywords):
                                     is_subcategory = True
@@ -494,7 +509,7 @@ def find_subcategories(driver):
         
         # Strategy 2: Look for subcategory sections by text patterns (only valid categories)
         try:
-            for keyword in ["Fresh Vegetables", "Fresh Fruits", "Exotic", "Premium", "Organic", "Leafy", "Herb", "Cuts", "Sprouts", "Flowers", "Flower", "Plants", "Plant", "Gardening"]:
+            for keyword in ["Atta", "Rice", "Dal", "Oil", "Besan", "Ghee", "Sooji"]:
                 # Skip if keyword is in excluded list
                 if keyword.lower() in [kw.lower() for kw in excluded_keywords]:
                     continue
@@ -519,24 +534,19 @@ def find_subcategories(driver):
         
         # Strategy 3: If we found the main category page, try to construct subcategory URLs
         current_url = driver.current_url
-        if "fruits-vegetables" in current_url.lower():
+        if "atta-rice-oil-dals" in current_url.lower():
             # Try common subcategory URL patterns (only valid ones)
             base_url = current_url.split("/cn/")[0] + "/cn/"
             potential_subcategories = [
-                ("fresh-vegetables", "fresh vegetables"),
-                ("fresh-fruits", "fresh fruits"),
-                ("exotic", "exotic"),
-                ("premium", "premium"),
-                ("organic", "organic"),
-                ("leafy", "leafy"),
-                ("herbs", "herbs"),
-                ("cuts", "cuts"),
-                ("sprouts", "sprouts"),
-                ("flowers", "flowers"),
-                ("flower", "flower"),
-                ("plants", "plants"),
-                ("plant", "plant"),
-                ("gardening", "gardening"),
+                ("atta", "atta"),
+                ("rice", "rice"),
+                ("dals", "dals"),
+                ("pulses", "pulses"),
+                ("oil", "oil"),
+                ("oils", "oils"),
+                ("besan", "besan"),
+                ("sooji", "sooji"),
+                ("ghee", "ghee"),  # Ghee is a type of oil/clarified butter
             ]
             
             for sub_path, sub_name in potential_subcategories:
@@ -579,8 +589,26 @@ def main():
     
     try:
         print("=" * 60)
-        print("Zepto Scraper - Fruits & Vegetables Category")
+        print("Zepto Scraper - Atta, Rice, Oil & Dals Category")
         print("=" * 60)
+        
+        # Check if URL is set
+        if "..." in ATTA_RICE_OIL_DALS_URL:
+            print("\n[IMPORTANT] Category URL not configured!")
+            print("Please update ATTA_RICE_OIL_DALS_URL in the script with the actual category URL.")
+            print("\nTo find the URL:")
+            print("  1. Open Zepto in your browser")
+            print("  2. Navigate to 'Atta, Rice, Oil & Dals' category")
+            print("  3. Copy the full URL from the address bar")
+            print("  4. Update ATTA_RICE_OIL_DALS_URL in this script")
+            print("\nOr you can provide it now:")
+            user_url = input("Enter the Atta, Rice, Oil & Dals category URL (or press Enter to exit): ").strip()
+            if not user_url:
+                print("Exiting...")
+                return
+            category_url = user_url
+        else:
+            category_url = ATTA_RICE_OIL_DALS_URL
         
         # Setup
         print("\n[1/5] Setting up browser...")
@@ -595,20 +623,13 @@ def main():
         
         # Wait for user to set location
         print("\n" + "=" * 60)
-        print("IMPORTANT: Set location manually in the browser")
+        print("IMPORTANT: Set location to Whitefield (560067) in the browser")
         print("=" * 60)
-        print("\nPlease set the location manually:")
-        print("1. Look for location button/display in the header")
-        print("2. Click on it to open location modal")
-        print("3. Enter PIN code: 560067 (or your preferred location)")
-        print("4. Click Apply/Confirm")
-        print("\nAfter setting location, press Enter here to continue...")
-        input("Press Enter after location is set...")
-        print("\n[OK] Continuing with scraping...")
+        input("Press Enter after you've set the location...")
         
         # Navigate to main category page
-        print("\n[3/5] Navigating to Fruits & Vegetables category...")
-        driver.get(FRUITS_VEGETABLES_URL)
+        print("\n[3/5] Navigating to Atta, Rice, Oil & Dals category...")
+        driver.get(category_url)
         print("  Waiting for page to load...")
         time.sleep(8)
         
@@ -693,28 +714,26 @@ def main():
                 print(f"Note: {len(all_products) - unique_names} duplicate(s) found (same name, different variants)")
             
             # Show breakdown by type (all products are already filtered)
-            print("\nProduct breakdown (Fruits & Vegetables including Flowers, Plants & Gardening):")
+            print("\nProduct breakdown (filtered - only Atta, Rice, Oil, Dals/Pulses):")
             name_lower = lambda p: (p.get('name', '') or '').lower()
             url_lower = lambda p: (p.get('product_url', '') or '').lower()
             
-            fruits_count = sum(1 for p in all_products if any(kw in name_lower(p) or kw in url_lower(p) 
-                for kw in ['fruit', 'apple', 'banana', 'orange', 'mango', 'grapes', 'strawberry', 'blueberry', 'kiwi', 'pineapple', 'watermelon', 'papaya', 'guava', 'pomegranate', 'mosambi']))
-            vegetables_count = sum(1 for p in all_products if any(kw in name_lower(p) or kw in url_lower(p) 
-                for kw in ['vegetable', 'tomato', 'onion', 'potato', 'carrot', 'cucumber', 'cabbage', 'cauliflower', 'broccoli', 'spinach', 'lettuce', 'coriander', 'mint', 'chilli', 'pepper', 'capsicum', 'beans', 'peas', 'mushroom']))
-            organic_count = sum(1 for p in all_products if 'organic' in name_lower(p) or 'organic' in url_lower(p))
-            leafy_herbs_count = sum(1 for p in all_products if any(kw in name_lower(p) or kw in url_lower(p) 
-                for kw in ['leafy', 'herb', 'greens', 'palak', 'methi', 'dill', 'basil', 'coriander', 'mint', 'curry leaves']))
-            flowers_plants_count = sum(1 for p in all_products if any(kw in name_lower(p) or kw in url_lower(p) 
-                for kw in ['flower', 'flowers', 'plant', 'plants', 'gardening', 'seed', 'seeds', 'fertilizer', 'pot', 'pots', 'soil', 'rose', 'marigold', 'jasmine']))
+            atta_count = sum(1 for p in all_products if any(kw in name_lower(p) or kw in url_lower(p) 
+                for kw in ['atta', 'flour', 'besan', 'sooji', 'rava', 'maida', 'chakki', 'dalia']))
+            rice_count = sum(1 for p in all_products if any(kw in name_lower(p) or kw in url_lower(p) 
+                for kw in ['rice', 'basmati', 'sona', 'masoori', 'masuri', 'poha', 'quinoa', 'millet', 'kolam']))
+            dal_count = sum(1 for p in all_products if any(kw in name_lower(p) or kw in url_lower(p) 
+                for kw in ['dal', 'pulse', 'chana', 'moong', 'urad', 'toor', 'arhar', 'masoor', 'rajma', 'kabuli', 'peanut', 'groundnut', 'mungfali', 'sattu']))
+            oil_count = sum(1 for p in all_products if any(kw in name_lower(p) or kw in url_lower(p) 
+                for kw in ['oil', 'ghee']))
             
-            print(f"  - Fruits: {fruits_count}")
-            print(f"  - Vegetables: {vegetables_count}")
-            print(f"  - Organic: {organic_count}")
-            print(f"  - Leafy & Herbs: {leafy_herbs_count}")
-            print(f"  - Flowers, Plants & Gardening: {flowers_plants_count}")
+            print(f"  - Atta/Flour: {atta_count}")
+            print(f"  - Rice: {rice_count}")
+            print(f"  - Dals/Pulses: {dal_count}")
+            print(f"  - Oil/Ghee: {oil_count}")
             
-            # Calculate others (products that might match multiple categories)
-            others = len(all_products) - fruits_count - vegetables_count - organic_count - leafy_herbs_count - flowers_plants_count
+            # Calculate others (products that might match multiple categories or have different keywords)
+            others = len(all_products) - atta_count - rice_count - dal_count - oil_count
             if others > 0:
                 print(f"  - Others (may overlap with above): {others}")
             else:
@@ -728,7 +747,7 @@ def main():
             print("\n[ERROR] No products found!")
             print("Make sure:")
             print("  1. Location is set correctly (560067)")
-            print("  2. You're on the Fruits & Vegetables page")
+            print("  2. You're on the Atta, Rice, Oil & Dals page")
             print("  3. Products are visible in the browser")
             print(f"  4. Current URL: {driver.current_url}")
         

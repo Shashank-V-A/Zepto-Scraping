@@ -1,6 +1,6 @@
 """
-Zepto Scraper - Fruits & Vegetables Category
-Extracts all products from the Fruits & Vegetables category with accurate values.
+Zepto Scraper - Meat, Fish & Eggs Category
+Extracts all products from the Meat, Fish & Eggs category with accurate values.
 """
 
 from selenium import webdriver
@@ -18,9 +18,11 @@ import os
 import re
 
 # Configuration
-FRUITS_VEGETABLES_URL = "https://www.zepto.com/cn/fruits-vegetables/fruits-vegetables/cid/64374cfe-d06f-4a01-898e-c07c46462c36/scid/e78a8422-5f20-4e4b-9a9f-22a0e53962e3"
-OUTPUT_CSV = "output/zepto_Fruits&Vegetables.csv"
-OUTPUT_JSON = "output/zepto_Fruits&Vegetables.json"
+# TODO: Replace with the actual Meat, Fish & Eggs category URL
+# You can find this by navigating to the category in your browser and copying the URL
+MEAT_FISH_EGGS_URL = "https://www.zepto.com/cn/meats-fish-eggs/meats-fish-eggs/cid/4654bd8a-fb30-4ee1-ab30-4bf581b6c6e3/scid/95157c69-f03e-48e5-ae2f-d947af34397f"  # Update this
+OUTPUT_CSV = "output/zepto_meat_fish_eggs.csv"
+OUTPUT_JSON = "output/zepto_meat_fish_eggs.json"
 
 def setup_driver():
     """Setup Chrome driver with error suppression."""
@@ -49,7 +51,7 @@ def setup_driver():
 
 def is_valid_product(product):
     """
-    Check if product belongs to Fruits & Vegetables categories.
+    Check if product belongs to Meat, Fish & Eggs categories.
     Returns True if valid, False otherwise.
     """
     name = (product.get('name') or '').lower()
@@ -58,12 +60,16 @@ def is_valid_product(product):
     
     # Keywords that indicate invalid products (should be excluded)
     invalid_keywords = [
-        'bread', 'biryani', 'kit', 'incl. of all taxes', 'buy ', 'online'
+        'bread', 'biryani', 'kit', 'incl. of all taxes', 'buy ', 'online',
+        'marinade', 'snack', 'sauce', 'spice', 'masala', 'marination'
     ]
     
     # Check for invalid keywords first
     for invalid_kw in invalid_keywords:
         if invalid_kw in combined_text:
+            # Exception: "marinade" in combo products might be okay if it's part of a meat combo
+            if invalid_kw == 'marinade' and any(kw in combined_text for kw in ['chicken', 'fish', 'mutton', 'meat']):
+                continue
             if invalid_kw in ['bread', 'biryani', 'kit']:
                 return False
             if invalid_kw in ['incl. of all taxes', 'buy ', 'online']:
@@ -71,24 +77,17 @@ def is_valid_product(product):
     
     # Keywords that indicate valid products
     valid_keywords = [
-        # Fruits
-        'fruit', 'apple', 'banana', 'orange', 'mango', 'grapes', 'strawberry',
-        'blueberry', 'kiwi', 'pineapple', 'watermelon', 'papaya', 'guava',
-        'pomegranate', 'mosambi', 'sweet lime', 'lemon', 'lime', 'avocado',
-        # Vegetables
-        'vegetable', 'tomato', 'onion', 'potato', 'carrot', 'cucumber',
-        'cabbage', 'cauliflower', 'broccoli', 'spinach', 'lettuce', 'coriander',
-        'mint', 'curry leaves', 'chilli', 'pepper', 'capsicum', 'beans',
-        'peas', 'mushroom', 'ginger', 'garlic', 'turmeric', 'radish',
-        'beetroot', 'brinjal', 'lady finger', 'okra', 'pumpkin', 'bottle gourd',
-        # Organics
-        'organic', 'organically grown',
-        # Leafy & Herbs
-        'leafy', 'herb', 'greens', 'palak', 'methi', 'dill', 'basil',
-        # Flowers, Plants & Gardening
-        'flower', 'flowers', 'plant', 'plants', 'gardening', 'seed', 'seeds',
-        'fertilizer', 'pot', 'pots', 'soil', 'sapling', 'saplings', 'rose',
-        'marigold', 'jasmine', 'tulip', 'orchid', 'sunflower', 'lily'
+        # Meat
+        'chicken', 'mutton', 'lamb', 'goat', 'beef', 'pork', 'meat',
+        # Fish & Seafood
+        'fish', 'prawn', 'shrimp', 'crab', 'lobster', 'squid', 'octopus',
+        'seafood', 'salmon', 'tuna', 'rohu', 'katla', 'pomfret', 'bangda',
+        # Eggs
+        'egg', 'eggs',
+        # Cold Cuts
+        'sausage', 'salami', 'ham', 'bacon', 'cold cut', 'cold cuts',
+        # Frozen Meat
+        'frozen meat', 'frozen chicken', 'frozen fish'
     ]
     
     # Check if product name or URL contains valid keywords
@@ -98,6 +97,141 @@ def is_valid_product(product):
     
     # If no valid keywords found, exclude it
     return False
+
+def find_subcategories(driver):
+    """Find subcategory links (Chicken, Fish, Mutton, Eggs, Cold Cuts, etc.) on the category page."""
+    subcategory_urls = []
+    subcategory_names = []
+    
+    print("\n  Looking for subcategories (Chicken, Fish, Mutton, Eggs, Cold Cuts, etc.)...")
+    
+    # Common subcategory keywords - ONLY for Meat, Fish & Eggs
+    subcategory_keywords = [
+        "chicken", "fish", "mutton", "egg", "eggs", "seafood", "prawn", "shrimp",
+        "cold cut", "cold cuts", "sausage", "salami", "frozen meat", "lamb", "goat"
+    ]
+    
+    # Exclude these subcategories
+    excluded_keywords = [
+        "marinade", "snack", "sauce", "spice", "masala", "bread", "biryani"
+    ]
+    
+    try:
+        # Strategy 1: Look for links that might be subcategories
+        all_links = driver.find_elements(By.TAG_NAME, "a")
+        
+        for link in all_links:
+            try:
+                href = link.get_attribute("href") or ""
+                text = (link.text or "").strip().lower()
+                
+                # Check if it's a subcategory link
+                if href and "zepto.com" in href:
+                    # Check if URL contains category indicators
+                    url_lower = href.lower()
+                    if any(keyword in url_lower for keyword in subcategory_keywords):
+                        # Check if text matches subcategory keywords OR if URL clearly indicates a subcategory
+                        is_subcategory = False
+                        
+                        # First check: exclude if it contains excluded keywords
+                        if any(excluded_kw in text or excluded_kw in url_lower for excluded_kw in excluded_keywords):
+                            continue
+                        
+                        if any(keyword in text for keyword in subcategory_keywords):
+                            is_subcategory = True
+                        elif "/cn/" in href and "/pn/" not in href:
+                            # If it's a category URL (not product), it might be a subcategory
+                            # Check if it's different from the main category URL
+                            if "meats-fish-eggs" not in url_lower or len([k for k in ["chicken", "fish", "mutton", "egg"] if k in url_lower]) == 1:
+                                # Make sure it doesn't contain excluded keywords
+                                if not any(excluded_kw in url_lower for excluded_kw in excluded_keywords):
+                                    is_subcategory = True
+                        
+                        if is_subcategory and href not in subcategory_urls:
+                            subcategory_urls.append(href)
+                            subcategory_names.append(link.text.strip() or href.split("/")[-1])
+                            print(f"    Found subcategory: {link.text.strip()[:50] if link.text.strip() else href[:50]}")
+            except:
+                continue
+        
+        # Strategy 2: Look for subcategory sections by text patterns (only valid categories)
+        try:
+            for keyword in ["Chicken", "Fish", "Mutton", "Egg", "Eggs", "Seafood", "Prawn", "Cold Cut", "Sausage"]:
+                # Skip if keyword is in excluded list
+                if keyword.lower() in [kw.lower() for kw in excluded_keywords]:
+                    continue
+                try:
+                    # Find elements with the keyword and get their parent links
+                    xpath = f"//a[contains(translate(text(), 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), '{keyword.lower()}')]"
+                    elements = driver.find_elements(By.XPATH, xpath)
+                    for elem in elements:
+                        try:
+                            href = elem.get_attribute("href") or ""
+                            if href and "zepto.com" in href and "/cn/" in href and "/pn/" not in href:
+                                if href not in subcategory_urls:
+                                    subcategory_urls.append(href)
+                                    subcategory_names.append(elem.text.strip() or keyword)
+                                    print(f"    Found subcategory via text search: {elem.text.strip()[:50] if elem.text.strip() else keyword}")
+                        except:
+                            continue
+                except:
+                    continue
+        except:
+            pass
+        
+        # Strategy 3: If we found the main category page, try to construct subcategory URLs
+        current_url = driver.current_url
+        if "meats-fish-eggs" in current_url.lower() or "meat" in current_url.lower():
+            # Try common subcategory URL patterns (only valid ones)
+            base_url = current_url.split("/cn/")[0] + "/cn/"
+            potential_subcategories = [
+                ("chicken", "chicken"),
+                ("fish", "fish"),
+                ("seafood", "seafood"),
+                ("mutton", "mutton"),
+                ("lamb", "lamb"),
+                ("goat", "goat"),
+                ("egg", "egg"),
+                ("eggs", "eggs"),
+                ("cold-cut", "cold cuts"),
+                ("cold-cuts", "cold cuts"),
+                ("sausage", "sausage"),
+                ("frozen-meat", "frozen meat"),
+            ]
+            
+            for sub_path, sub_name in potential_subcategories:
+                try:
+                    # Try to find if this subcategory exists by looking for links
+                    test_url = base_url + sub_path
+                    # Don't add if we already have it
+                    if not any(test_url in url for url in subcategory_urls):
+                        # Check if there's a link to this subcategory on the page
+                        test_links = driver.find_elements(By.XPATH, f"//a[contains(@href, '{sub_path}')]")
+                        if test_links:
+                            for link in test_links:
+                                href = link.get_attribute("href") or ""
+                                if href and "/cn/" in href and "/pn/" not in href and href not in subcategory_urls:
+                                    subcategory_urls.append(href)
+                                    subcategory_names.append(sub_name.capitalize())
+                                    print(f"    Found subcategory via URL pattern: {sub_name.capitalize()}")
+                                    break
+                except:
+                    continue
+        
+    except Exception as e:
+        print(f"    [WARNING] Error finding subcategories: {str(e)}")
+    
+    # Remove duplicates
+    seen = set()
+    unique_urls = []
+    unique_names = []
+    for url, name in zip(subcategory_urls, subcategory_names):
+        if url not in seen:
+            seen.add(url)
+            unique_urls.append(url)
+            unique_names.append(name)
+    
+    return unique_urls, unique_names
 
 def scroll_page(driver, times=25):
     """Scroll page to load products - stops when no new products found."""
@@ -148,8 +282,8 @@ def extract_products(driver):
     current_url = driver.current_url
     print(f"  Current URL: {current_url[:80]}...")
     
-    if "fruits-vegetables" not in current_url.lower() and "fruit" not in current_url.lower() and "vegetable" not in current_url.lower():
-        print("  [WARNING] Might not be on Fruits & Vegetables page!")
+    if "meat" not in current_url.lower() and "fish" not in current_url.lower() and "egg" not in current_url.lower():
+        print("  [WARNING] Might not be on Meat, Fish & Eggs page!")
     
     # PRIMARY METHOD: Find all elements with price (₹) - most reliable
     print("  Finding products by looking for price (₹)...")
@@ -294,7 +428,7 @@ def extract_products(driver):
                         if len(url_parts) > 1:
                             product_slug = url_parts[1].split("/")[0]
                             # Convert slug to readable name
-                            # e.g., "strawberry-mahabaleshwar" -> "Strawberry Mahabaleshwar"
+                            # e.g., "chicken-breast-boneless" -> "Chicken Breast Boneless"
                             name_parts = product_slug.split("-")
                             # Capitalize first letter of each word
                             product_name = " ".join(word.capitalize() for word in name_parts)
@@ -349,7 +483,7 @@ def extract_products(driver):
                         if re.match(r'^\d+\s*(pack|g|kg|ml|l|pc|pcs|Approx)', line_clean, re.IGNORECASE):
                             continue
                         # Skip if it's a category header
-                        if "price list" in line_clean.lower() or ("fruits" in line_clean.lower() and "vegetables" in line_clean.lower()):
+                        if "price list" in line_clean.lower() or ("meat" in line_clean.lower() and "fish" in line_clean.lower()):
                             continue
                         # Skip if it's just a number or weight
                         if re.match(r'^\d+[\s-]+\d+\s*(g|kg)', line_clean, re.IGNORECASE):
@@ -397,7 +531,7 @@ def extract_products(driver):
                     # Double-check: skip if name is still a button
                     name_upper = product['name'].upper()
                     if name_upper not in ["ADD", "NOTIFY", "EXPLORE", "BUY NOW"]:
-                        # Filter: Only include Fruits & Vegetables products
+                        # Filter: Only include Meat, Fish & Eggs products
                         if is_valid_product(product):
                             product['scraped_at'] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                             products.append(product)
@@ -437,150 +571,32 @@ def save_data(products):
     print(f"  - {OUTPUT_CSV}")
     print(f"  - {OUTPUT_JSON}")
 
-def find_subcategories(driver):
-    """Find subcategory links (Fresh Vegetables, Fresh Fruits, Exotics, Organics, etc.) on the category page."""
-    subcategory_urls = []
-    subcategory_names = []
-    
-    print("\n  Looking for subcategories (Fresh Vegetables, Fresh Fruits, Exotics, Organics, etc.)...")
-    
-    # Common subcategory keywords - ONLY for Fruits & Vegetables
-    subcategory_keywords = [
-        "fresh vegetables", "fresh fruits", "exotic", "premium", "organic",
-        "leafy", "herb", "cuts", "sprouts", "frozen", "vegetable", "fruit",
-        "flower", "flowers", "plant", "plants", "gardening", "seed", "seeds"
-    ]
-    
-    # Exclude these subcategories (none - we want everything)
-    excluded_keywords = []
-    
-    try:
-        # Strategy 1: Look for links that might be subcategories
-        all_links = driver.find_elements(By.TAG_NAME, "a")
-        
-        for link in all_links:
-            try:
-                href = link.get_attribute("href") or ""
-                text = (link.text or "").strip().lower()
-                
-                # Check if it's a subcategory link
-                if href and "zepto.com" in href:
-                    # Check if URL contains category indicators
-                    url_lower = href.lower()
-                    if any(keyword in url_lower for keyword in subcategory_keywords):
-                        # Check if text matches subcategory keywords OR if URL clearly indicates a subcategory
-                        is_subcategory = False
-                        
-                        # First check: exclude if it contains excluded keywords
-                        if any(excluded_kw in text or excluded_kw in url_lower for excluded_kw in excluded_keywords):
-                            continue
-                        
-                        if any(keyword in text for keyword in subcategory_keywords):
-                            is_subcategory = True
-                        elif "/cn/" in href and "/pn/" not in href:
-                            # If it's a category URL (not product), it might be a subcategory
-                            # Check if it's different from the main category URL
-                            if "fruits-vegetables" not in url_lower or len([k for k in ["fresh", "exotic", "organic", "leafy"] if k in url_lower]) >= 1:
-                                # Make sure it doesn't contain excluded keywords
-                                if not any(excluded_kw in url_lower for excluded_kw in excluded_keywords):
-                                    is_subcategory = True
-                        
-                        if is_subcategory and href not in subcategory_urls:
-                            subcategory_urls.append(href)
-                            subcategory_names.append(link.text.strip() or href.split("/")[-1])
-                            print(f"    Found subcategory: {link.text.strip()[:50] if link.text.strip() else href[:50]}")
-            except:
-                continue
-        
-        # Strategy 2: Look for subcategory sections by text patterns (only valid categories)
-        try:
-            for keyword in ["Fresh Vegetables", "Fresh Fruits", "Exotic", "Premium", "Organic", "Leafy", "Herb", "Cuts", "Sprouts", "Flowers", "Flower", "Plants", "Plant", "Gardening"]:
-                # Skip if keyword is in excluded list
-                if keyword.lower() in [kw.lower() for kw in excluded_keywords]:
-                    continue
-                try:
-                    # Find elements with the keyword and get their parent links
-                    xpath = f"//a[contains(translate(text(), 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), '{keyword.lower()}')]"
-                    elements = driver.find_elements(By.XPATH, xpath)
-                    for elem in elements:
-                        try:
-                            href = elem.get_attribute("href") or ""
-                            if href and "zepto.com" in href and "/cn/" in href and "/pn/" not in href:
-                                if href not in subcategory_urls:
-                                    subcategory_urls.append(href)
-                                    subcategory_names.append(elem.text.strip() or keyword)
-                                    print(f"    Found subcategory via text search: {elem.text.strip()[:50] if elem.text.strip() else keyword}")
-                        except:
-                            continue
-                except:
-                    continue
-        except:
-            pass
-        
-        # Strategy 3: If we found the main category page, try to construct subcategory URLs
-        current_url = driver.current_url
-        if "fruits-vegetables" in current_url.lower():
-            # Try common subcategory URL patterns (only valid ones)
-            base_url = current_url.split("/cn/")[0] + "/cn/"
-            potential_subcategories = [
-                ("fresh-vegetables", "fresh vegetables"),
-                ("fresh-fruits", "fresh fruits"),
-                ("exotic", "exotic"),
-                ("premium", "premium"),
-                ("organic", "organic"),
-                ("leafy", "leafy"),
-                ("herbs", "herbs"),
-                ("cuts", "cuts"),
-                ("sprouts", "sprouts"),
-                ("flowers", "flowers"),
-                ("flower", "flower"),
-                ("plants", "plants"),
-                ("plant", "plant"),
-                ("gardening", "gardening"),
-            ]
-            
-            for sub_path, sub_name in potential_subcategories:
-                try:
-                    # Try to find if this subcategory exists by looking for links
-                    test_url = base_url + sub_path
-                    # Don't add if we already have it
-                    if not any(test_url in url for url in subcategory_urls):
-                        # Check if there's a link to this subcategory on the page
-                        test_links = driver.find_elements(By.XPATH, f"//a[contains(@href, '{sub_path}')]")
-                        if test_links:
-                            for link in test_links:
-                                href = link.get_attribute("href") or ""
-                                if href and "/cn/" in href and "/pn/" not in href and href not in subcategory_urls:
-                                    subcategory_urls.append(href)
-                                    subcategory_names.append(sub_name.capitalize())
-                                    print(f"    Found subcategory via URL pattern: {sub_name.capitalize()}")
-                                    break
-                except:
-                    continue
-        
-    except Exception as e:
-        print(f"    [WARNING] Error finding subcategories: {str(e)}")
-    
-    # Remove duplicates
-    seen = set()
-    unique_urls = []
-    unique_names = []
-    for url, name in zip(subcategory_urls, subcategory_names):
-        if url not in seen:
-            seen.add(url)
-            unique_urls.append(url)
-            unique_names.append(name)
-    
-    return unique_urls, unique_names
-
 def main():
     """Main function."""
     driver = None
     
     try:
         print("=" * 60)
-        print("Zepto Scraper - Fruits & Vegetables Category")
+        print("Zepto Scraper - Meat, Fish & Eggs Category")
         print("=" * 60)
+        
+        # Check if URL is set
+        if "..." in MEAT_FISH_EGGS_URL:
+            print("\n[IMPORTANT] Category URL not configured!")
+            print("Please update MEAT_FISH_EGGS_URL in the script with the actual category URL.")
+            print("\nTo find the URL:")
+            print("  1. Open Zepto in your browser")
+            print("  2. Navigate to 'Meat, Fish & Eggs' category")
+            print("  3. Copy the full URL from the address bar")
+            print("  4. Update MEAT_FISH_EGGS_URL in this script")
+            print("\nOr you can provide it now:")
+            user_url = input("Enter the Meat, Fish & Eggs category URL (or press Enter to exit): ").strip()
+            if not user_url:
+                print("Exiting...")
+                return
+            category_url = user_url
+        else:
+            category_url = MEAT_FISH_EGGS_URL
         
         # Setup
         print("\n[1/5] Setting up browser...")
@@ -595,20 +611,13 @@ def main():
         
         # Wait for user to set location
         print("\n" + "=" * 60)
-        print("IMPORTANT: Set location manually in the browser")
+        print("IMPORTANT: Set location to Whitefield (560067) in the browser")
         print("=" * 60)
-        print("\nPlease set the location manually:")
-        print("1. Look for location button/display in the header")
-        print("2. Click on it to open location modal")
-        print("3. Enter PIN code: 560067 (or your preferred location)")
-        print("4. Click Apply/Confirm")
-        print("\nAfter setting location, press Enter here to continue...")
-        input("Press Enter after location is set...")
-        print("\n[OK] Continuing with scraping...")
+        input("Press Enter after you've set the location...")
         
         # Navigate to main category page
-        print("\n[3/5] Navigating to Fruits & Vegetables category...")
-        driver.get(FRUITS_VEGETABLES_URL)
+        print("\n[3/5] Navigating to Meat, Fish & Eggs category...")
+        driver.get(category_url)
         print("  Waiting for page to load...")
         time.sleep(8)
         
@@ -693,28 +702,27 @@ def main():
                 print(f"Note: {len(all_products) - unique_names} duplicate(s) found (same name, different variants)")
             
             # Show breakdown by type (all products are already filtered)
-            print("\nProduct breakdown (Fruits & Vegetables including Flowers, Plants & Gardening):")
+            print("\nProduct breakdown (filtered - only Meat, Fish & Eggs):")
             name_lower = lambda p: (p.get('name', '') or '').lower()
             url_lower = lambda p: (p.get('product_url', '') or '').lower()
             
-            fruits_count = sum(1 for p in all_products if any(kw in name_lower(p) or kw in url_lower(p) 
-                for kw in ['fruit', 'apple', 'banana', 'orange', 'mango', 'grapes', 'strawberry', 'blueberry', 'kiwi', 'pineapple', 'watermelon', 'papaya', 'guava', 'pomegranate', 'mosambi']))
-            vegetables_count = sum(1 for p in all_products if any(kw in name_lower(p) or kw in url_lower(p) 
-                for kw in ['vegetable', 'tomato', 'onion', 'potato', 'carrot', 'cucumber', 'cabbage', 'cauliflower', 'broccoli', 'spinach', 'lettuce', 'coriander', 'mint', 'chilli', 'pepper', 'capsicum', 'beans', 'peas', 'mushroom']))
-            organic_count = sum(1 for p in all_products if 'organic' in name_lower(p) or 'organic' in url_lower(p))
-            leafy_herbs_count = sum(1 for p in all_products if any(kw in name_lower(p) or kw in url_lower(p) 
-                for kw in ['leafy', 'herb', 'greens', 'palak', 'methi', 'dill', 'basil', 'coriander', 'mint', 'curry leaves']))
-            flowers_plants_count = sum(1 for p in all_products if any(kw in name_lower(p) or kw in url_lower(p) 
-                for kw in ['flower', 'flowers', 'plant', 'plants', 'gardening', 'seed', 'seeds', 'fertilizer', 'pot', 'pots', 'soil', 'rose', 'marigold', 'jasmine']))
+            chicken_count = sum(1 for p in all_products if 'chicken' in name_lower(p) or 'chicken' in url_lower(p))
+            fish_count = sum(1 for p in all_products if any(kw in name_lower(p) or kw in url_lower(p) 
+                for kw in ['fish', 'prawn', 'shrimp', 'crab', 'seafood', 'salmon', 'tuna', 'rohu', 'katla', 'pomfret', 'bangda']))
+            mutton_count = sum(1 for p in all_products if any(kw in name_lower(p) or kw in url_lower(p) 
+                for kw in ['mutton', 'lamb', 'goat']))
+            egg_count = sum(1 for p in all_products if 'egg' in name_lower(p) or 'egg' in url_lower(p))
+            cold_cuts_count = sum(1 for p in all_products if any(kw in name_lower(p) or kw in url_lower(p) 
+                for kw in ['sausage', 'salami', 'ham', 'bacon', 'cold cut', 'cold cuts']))
             
-            print(f"  - Fruits: {fruits_count}")
-            print(f"  - Vegetables: {vegetables_count}")
-            print(f"  - Organic: {organic_count}")
-            print(f"  - Leafy & Herbs: {leafy_herbs_count}")
-            print(f"  - Flowers, Plants & Gardening: {flowers_plants_count}")
+            print(f"  - Chicken: {chicken_count}")
+            print(f"  - Fish & Seafood: {fish_count}")
+            print(f"  - Mutton/Lamb/Goat: {mutton_count}")
+            print(f"  - Eggs: {egg_count}")
+            print(f"  - Cold Cuts: {cold_cuts_count}")
             
             # Calculate others (products that might match multiple categories)
-            others = len(all_products) - fruits_count - vegetables_count - organic_count - leafy_herbs_count - flowers_plants_count
+            others = len(all_products) - chicken_count - fish_count - mutton_count - egg_count - cold_cuts_count
             if others > 0:
                 print(f"  - Others (may overlap with above): {others}")
             else:
@@ -728,7 +736,7 @@ def main():
             print("\n[ERROR] No products found!")
             print("Make sure:")
             print("  1. Location is set correctly (560067)")
-            print("  2. You're on the Fruits & Vegetables page")
+            print("  2. You're on the Meat, Fish & Eggs page")
             print("  3. Products are visible in the browser")
             print(f"  4. Current URL: {driver.current_url}")
         
